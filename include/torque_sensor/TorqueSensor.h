@@ -3,10 +3,42 @@
 #include <string>
 #include <cstdint>
 #include <memory>
-#include <mutex>
+#include <atomic>
+#include <thread>
 #include <serial/serial.h>
+#include "iostream"
 
+#define USB_TORQUE_SENSOR_FRAME_SIZE 4
 namespace torque_sensor {
+
+        
+class FrequencyCaculator {
+public:
+    FrequencyCaculator() {
+        start_ = std::chrono::high_resolution_clock::now();
+    }
+
+    void sampleFrequency() {
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start_);
+        start_ = end;
+        if (duration.count() > 0) {
+            frequency_hz_ = 1e6 / duration.count();
+            //std::cout << duration.count() << std::endl;
+            //std::cout << end.time_since_epoch().count() << std::endl;
+        }
+    }
+
+	double getFrequency() const {
+		return frequency_hz_;
+	}
+
+
+	private:
+    std::chrono::high_resolution_clock::time_point start_;
+	std::atomic<double> frequency_hz_ = 0.0;
+};
+
 
 class TorqueSensor {
 public:
@@ -35,7 +67,7 @@ public:
     ~TorqueSensor();
 
     /**
-     * @brief Open the serial port connection
+     * @brief Open the serial port connection and start the background reading thread.
      * 
      * @return true If connection successful
      * @return false If connection failed
@@ -43,7 +75,7 @@ public:
     bool connect();
 
     /**
-     * @brief Close the serial port connection
+     * @brief Stop the reading thread and close the serial port connection.
      */
     void disconnect();
 
@@ -56,34 +88,41 @@ public:
     bool isConnected() const;
 
     /**
-     * @brief Read available data from serial port and update torque value
+     * @brief Get the latest torque value.
+     * This method is thread-safe and lock-free.
      * 
-     * @return true If a valid data packet was found and parsed
-     * @return false If no new valid data was processed
-     */
-    bool update();
-
-    /**
-     * @brief Get the last received torque value
-     * 
-     * @return float Torque value
+     * @return float Torque value in Nm
      */
     float getTorque() const;
+    float getFrequency() const;
 
 private:
+    /**
+     * @brief Background loop for reading and parsing data.
+     */
+    void readingLoop();
+
     std::string port_name_;
     uint32_t baudrate_;
     TorqueSensorType type_;
     float zero_voltage_;
     float max_voltage_;
     std::unique_ptr<serial::Serial> serial_;
-    float torque_value_;
-    mutable std::mutex mutex_;
+    
+    // High performance storage
+    std::atomic<uint16_t> raw_data_;
 
-    /**
-     * @brief Helper to convert hex data to signed integer
-     */
-    int16_t hex2dec(uint16_t hexData);
+    // Threading and State
+    std::atomic<bool> running_;
+    std::thread reading_thread_;
+
+    // Buffer for ring buffer mechanism
+    std::vector<uint8_t> buffer_;
+
+    // Pre-computed constants
+    float slope_;
+
+    FrequencyCaculator frequency_calculator_;
 };
 
 } // namespace torque_sensor

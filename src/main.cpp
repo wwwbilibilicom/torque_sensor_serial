@@ -15,18 +15,18 @@ int main() {
     // Register signal handler for Ctrl+C
     signal(SIGINT, signalHandler);
 
-    // Default port from the original example
+    // Default port
     // You may want to make this configurable via command line arguments
-    std::string port = "/dev/serial/by-id/usb-Hiker_sudio_YK_COM_Port_6D7816855250Port-if00";
+    std::string port = "/dev/ttyACM0";
     uint32_t baudrate = 256000;
     
-    // Configuration for 30Nm Sensor with 0-10V output (0V=-30Nm, 5V=0Nm, 10V=30Nm)
-    torque_sensor::TorqueSensor::TorqueSensorType type = torque_sensor::TorqueSensor::TorqueSensorType::RANGE_100NM;
+    // Configuration for 100Nm Sensor with 0-10V output
+    torque_sensor::TorqueSensor::TorqueSensorType type = torque_sensor::TorqueSensor::TorqueSensorType::RANGE_30NM;
     float zero_voltage = 5.0f;
     float max_voltage = 10.0f;
 
     std::cout << "Initializing Torque Sensor on " << port << " at " << baudrate << " baud..." << std::endl;
-    std::cout << "Type: 30Nm, Zero: " << zero_voltage << "V, Max: " << max_voltage << "V" << std::endl;
+    std::cout << "Type: 100Nm, Zero: " << zero_voltage << "V, Max: " << max_voltage << "V" << std::endl;
 
     torque_sensor::TorqueSensor sensor(port, baudrate, type, zero_voltage, max_voltage);
 
@@ -37,13 +37,12 @@ int main() {
 
     std::cout << "Connected! Reading data (Press Ctrl+C to stop)..." << std::endl;
 
+    // Loop at approx 100Hz for display purposes
     while (running) {
-        if (sensor.update()) {
-            std::cout << "Torque: " << sensor.getTorque() << std::endl;
-        }
+        float torque = sensor.getTorque();
+        std::cout << "Torque: " << torque << " Nm" << std::endl;
         
-        // Small sleep to prevent 100% CPU usage, adjust as needed for required sample rate
-        std::this_thread::sleep_for(std::chrono::microseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
     std::cout << "\nStopping..." << std::endl;
