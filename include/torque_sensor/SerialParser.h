@@ -22,10 +22,12 @@ private:
     std::vector<uint8_t> ring_buffer;
     FrameCallback on_frame_parsed;
 
+
+
     // --- 协议配置区 ---
-    const uint8_t FRAME_HEAD = 0xFF; // 帧头由 0xFEF5 改为 0xFF
-    const uint8_t FRAME_TAIL = 0xFE; // 保持 0x5F，如果没有帧尾可设为 0
-    
+    const uint8_t FRAME_HEAD = 0x03; // 帧头由 0xFEF5 改为 0x04
+    const uint8_t FRAME_TAIL = 0x0d; // 保持 0x0d，如果没有帧尾可设为 0
+
     // 长度计算：头(1) + 数据(2) + 尾(1) = 4 字节
     const size_t TOTAL_FRAME_LEN = 4; 
     const size_t DATA_OFFSET = 1;    // 数据段从第 2 个字节开始
