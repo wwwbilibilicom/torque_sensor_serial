@@ -17,7 +17,7 @@ int main() {
 
     // Default port
     // You may want to make this configurable via command line arguments
-    std::string port = "/dev/ttyACM0";
+    std::string port = "/dev/ttyUSB0";
     uint32_t baudrate = 256000;
     
     // Configuration for 100Nm Sensor with 0-10V output

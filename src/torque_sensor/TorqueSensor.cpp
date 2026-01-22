@@ -23,9 +23,13 @@ TorqueSensor::TorqueSensor(const std::string& port_name, uint32_t baudrate, Torq
       max_voltage_(max_voltage), 
       raw_data_(0),
       running_(false),
-      slope_(0.0f) {
+      slope_(0.0f),
+      data_received_{false} {
     
-    buffer_.reserve(1024);
+    read_buffer_.reserve(MAX_READ_SIZE);
+    parser_ = std::make_unique<SerialParser>(
+        std::bind(&TorqueSensor::onFrameReceived, this, std::placeholders::_1)
+    );
 
     float max_torque = (type_ == TorqueSensorType::RANGE_30NM) ? 30.0f : 100.0f;
     if (std::abs(max_voltage_ - zero_voltage_) > 1e-6) {
@@ -104,62 +108,29 @@ bool TorqueSensor::isConnected() const {
 }
 
 void TorqueSensor::readingLoop() {
-    std::vector<uint8_t> temp_read_buf(1024);
+    std::vector<uint8_t> temp_read_buf(4);
     static int read_count_ = 0;
     while (running_) {
         try {
-            size_t bytes_read = serial_->read(temp_read_buf.data(), temp_read_buf.size());
-            read_count_ ++;
-            int find_count_ = 0;
-            if (bytes_read > 0) {
-                // std::cout << "Recv: ";
-                // for (size_t i = 0; i < bytes_read; ++i) {
-                //     std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(temp_read_buf[i]) << " ";
-                // }
-                // std::cout << std::dec << std::endl;
+            // 获取当前串口硬件缓冲区有多少字节在排队
+            size_t available = serial_->available();
+            
+            if (available > 0) {
+                // 限制单次读取量，不要超过 buffer 大小
+                size_t bytes_to_read = std::min(available, MAX_READ_SIZE);
 
-                buffer_.insert(buffer_.end(), temp_read_buf.begin(), temp_read_buf.begin() + bytes_read);
+                // 直接读入预先分配好的连续物理内存区域
+                // .data() 返回 uint8_t* 指针，性能等同于原生数组
+                size_t bytes_read = serial_->read(read_buffer_.data(), bytes_to_read);
 
-                size_t process_idx = 0;
-                // Use a loop index to scan the buffer instead of erasing from the front repeatedly
-                // This reduces complexity from O(N^2) to O(N) for the parsing step
-                while (process_idx + 4 <= buffer_.size()) {
-                    // 1. Search for Header 0x03
-                    if (buffer_[process_idx] != 0x03) {
-                         process_idx++;
-                         continue;
-                    }
-
-                    // 2. Check Tail 0x0D (Header is at process_idx, so Tail is at process_idx + 3)
-                    if (buffer_[process_idx + 3] == 0x0D) {
-                        uint16_t combined = (uint16_t)buffer_[process_idx + 1] | ((uint16_t)buffer_[process_idx + 2] << 8);
-                        
-                        raw_data_.store(combined, std::memory_order_release);
-                        frequency_calculator_.sampleFrequency();
-                        find_count_ ++;
-                        std::cout << "Read Count: " << read_count_ << ", Find Count: " << find_count_ << std::endl;
-                        std::cout   << "Frame: " 
-                                    << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(buffer_[process_idx]) << " "
-                                    << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(buffer_[process_idx + 1]) << " "
-                                    << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(buffer_[process_idx + 2]) << " "
-                                    << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(buffer_[process_idx + 3]) 
-                                    << std::endl;
-
-                        // Advance index past this valid frame
-                        process_idx += 4;
-                    } else {
-                        // Header found but Tail mismatch -> Invalid start
-                        // Advance by 1 to search for next potential header
-                        process_idx++;
-                    }
-                }
-
-                // Remove processed data from the beginning of the buffer in one go
-                if (process_idx > 0) {
-                    buffer_.erase(buffer_.begin(), buffer_.begin() + process_idx);
+                if (bytes_read > 0) {
+                    // 将原始数据流送入解包逻辑
+                    parser_->parse(read_buffer_.data(), bytes_read);
                 }
             } else {
-                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                // 串口通常不需要极高频率的空转，休眠 500us 可显著降低 CPU 占用
+                // 且不会对 1ms 级的数据产生延迟感知
+                std::this_thread::sleep_for(std::chrono::microseconds(10));
             }
         } catch (const std::exception& e) {
             std::cerr << "Error in torque sensor reading loop: " << e.what() << std::endl;
@@ -168,10 +139,22 @@ void TorqueSensor::readingLoop() {
     }
 }
 
+void TorqueSensor::onFrameReceived(const SensorFrame& frame) {
+    // 处理接收到的帧
+    raw_data_.store(frame.value, std::memory_order_release);
+    frequency_calculator_.sampleFrequency();
+    data_received_ = true;
+}
+
 float TorqueSensor::getTorque() const {
+    if (!data_received_) {
+        std::cerr << "No valid data received yet." << std::endl;
+        return 0.0f;
+    }
     uint16_t raw = raw_data_.load(std::memory_order_acquire);
     float current_voltage = (static_cast<float>(raw) / 32768.0f) * max_voltage_;
     return (current_voltage - zero_voltage_) * slope_;
+    // return static_cast<float>(raw_data_.load(std::memory_order_acquire));
 }
 
 float TorqueSensor::getFrequency() const {

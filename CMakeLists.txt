@@ -4,7 +4,7 @@ project(serial_torque_sensor)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Include directories
+# 包含目录
 include_directories(include)
 
 # --------------------------------------------------------
@@ -13,7 +13,6 @@ include_directories(include)
 set(SERIAL_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/serial)
 include_directories(${SERIAL_SOURCE_DIR}/include)
 
-# Define serial sources explicitly to avoid catkin dependencies
 set(SERIAL_SRCS
     ${SERIAL_SOURCE_DIR}/src/serial.cc
     ${SERIAL_SOURCE_DIR}/include/serial/serial.h
@@ -28,14 +27,27 @@ if(UNIX)
     set(SERIAL_LIBS rt pthread)
 endif()
 
-# Build serial as a static library
 add_library(serial STATIC ${SERIAL_SRCS})
 target_link_libraries(serial ${SERIAL_LIBS})
 # --------------------------------------------------------
 
-# Library for Torque Sensor
-add_library(torque_sensor src/torque_sensor/TorqueSensor.cpp)
+# --------------------------------------------------------
+# Library for Torque Sensor (包含解析逻辑和逻辑类)
+# --------------------------------------------------------
+add_library(torque_sensor STATIC)
+
+# 将源文件添加到库中
+target_sources(torque_sensor PRIVATE
+    src/torque_sensor/TorqueSensor.cpp
+    src/torque_sensor/SerialParser.cpp  # <-- 新增这一行
+)
+
+# 确保头文件路径正确
+target_include_directories(torque_sensor PUBLIC include)
+
+# 链接 serial 库
 target_link_libraries(torque_sensor PUBLIC serial)
+# --------------------------------------------------------
 
 # Main Executable
 add_executable(torque_sensor_node src/main.cpp)

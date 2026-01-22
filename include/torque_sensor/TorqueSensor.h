@@ -7,6 +7,7 @@
 #include <thread>
 #include <serial/serial.h>
 #include "iostream"
+#include "SerialParser.h"
 
 #define USB_TORQUE_SENSOR_FRAME_SIZE 4
 namespace torque_sensor {
@@ -102,6 +103,11 @@ private:
      */
     void readingLoop();
 
+    std::vector<uint8_t> read_buffer_;
+    std::unique_ptr<SerialParser> parser_;
+    void onFrameReceived(const SensorFrame& frame);
+    static constexpr size_t MAX_READ_SIZE = 1024;
+
     std::string port_name_;
     uint32_t baudrate_;
     TorqueSensorType type_;
@@ -110,19 +116,18 @@ private:
     std::unique_ptr<serial::Serial> serial_;
     
     // High performance storage
-    std::atomic<uint16_t> raw_data_;
+    std::atomic<int16_t> raw_data_;
 
     // Threading and State
     std::atomic<bool> running_;
     std::thread reading_thread_;
 
-    // Buffer for ring buffer mechanism
-    std::vector<uint8_t> buffer_;
-
     // Pre-computed constants
     float slope_;
 
     FrequencyCaculator frequency_calculator_;
+
+    bool data_received_;
 };
 
 } // namespace torque_sensor
