@@ -7,6 +7,7 @@
 // 针对新协议定义的结构体
 struct SensorFrame {
     int16_t value; // 假设 2 字节数据段代表一个 16 位传感器值
+    int16_t force_value;
 };
 
 class SerialParser {
@@ -28,8 +29,8 @@ private:
     const uint8_t FRAME_HEAD = 0x03; // 帧头由 0xFEF5 改为 0x04
     const uint8_t FRAME_TAIL = 0x0d; // 保持 0x0d，如果没有帧尾可设为 0
 
-    // 长度计算：头(1) + 数据(2) + 尾(1) = 4 字节
-    const size_t TOTAL_FRAME_LEN = 4; 
+    // 长度计算：头(1) + 数据(4) + 尾(1) = 6 字节
+    const size_t TOTAL_FRAME_LEN = 6; 
     const size_t DATA_OFFSET = 1;    // 数据段从第 2 个字节开始
     // ----------------
 

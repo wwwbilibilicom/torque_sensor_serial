@@ -28,15 +28,20 @@ void SerialParser::try_parse_buffer() {
             continue;
         }
 
-        // 3. 解析 2 字节数据段
-        // 假设是大端序 (High Byte first)，如果是小端序则反过来
+        // 3. 解析数据段
+        // 第一个数据段: value (2字节, 小端序)
         int16_t raw_val = static_cast<int16_t>((ring_buffer[DATA_OFFSET]) | 
-                                                ring_buffer[DATA_OFFSET + 1]<<8);
+                                                ring_buffer[DATA_OFFSET + 1] << 8);
+        
+        // 第二个数据段: force_value (2字节, 小端序)
+        int16_t raw_force = static_cast<int16_t>((ring_buffer[DATA_OFFSET + 2]) | 
+                                                  ring_buffer[DATA_OFFSET + 3] << 8);
 
         // 4. 执行回调
         if (on_frame_parsed) {
             SensorFrame frame;
             frame.value = raw_val;
+            frame.force_value = raw_force;
             on_frame_parsed(frame);
         }
 
