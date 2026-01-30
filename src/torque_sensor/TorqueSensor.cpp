@@ -166,7 +166,7 @@ float TorqueSensor::getForce() const {
     }
     int16_t raw = raw_force_data_.load(std::memory_order_acquire);
     // 返回原始值，如果需要转换可在此处添加转换逻辑
-    return static_cast<float>(raw);
+    return (float)(static_cast<float>(raw)/20.0f);
 }
 
 float TorqueSensor::getFrequency() const {
