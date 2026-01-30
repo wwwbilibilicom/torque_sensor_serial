@@ -22,6 +22,7 @@ TorqueSensor::TorqueSensor(const std::string& port_name, uint32_t baudrate, Torq
       zero_voltage_(zero_voltage), 
       max_voltage_(max_voltage), 
       raw_data_(0),
+      raw_force_data_(0),
       running_(false),
       slope_(0.0f),
       data_received_{false} {
@@ -142,6 +143,7 @@ void TorqueSensor::readingLoop() {
 void TorqueSensor::onFrameReceived(const SensorFrame& frame) {
     // 处理接收到的帧
     raw_data_.store(frame.value, std::memory_order_release);
+    raw_force_data_.store(frame.force_value, std::memory_order_release);
     frequency_calculator_.sampleFrequency();
     data_received_ = true;
 }
@@ -155,6 +157,16 @@ float TorqueSensor::getTorque() const {
     float current_voltage = (static_cast<float>(raw) / 32768.0f) * max_voltage_;
     return (current_voltage - zero_voltage_) * slope_;
     // return static_cast<float>(raw_data_.load(std::memory_order_acquire));
+}
+
+float TorqueSensor::getForce() const {
+    if (!data_received_) {
+        std::cerr << "No valid data received yet." << std::endl;
+        return 0.0f;
+    }
+    int16_t raw = raw_force_data_.load(std::memory_order_acquire);
+    // 返回原始值，如果需要转换可在此处添加转换逻辑
+    return static_cast<float>(raw);
 }
 
 float TorqueSensor::getFrequency() const {

@@ -95,6 +95,15 @@ public:
      * @return float Torque value in Nm
      */
     float getTorque() const;
+
+    /**
+     * @brief Get the latest force value.
+     * This method is thread-safe and lock-free.
+     * 
+     * @return float Force value (raw or converted)
+     */
+    float getForce() const;
+
     float getFrequency() const;
 
 private:
@@ -116,7 +125,8 @@ private:
     std::unique_ptr<serial::Serial> serial_;
     
     // High performance storage
-    std::atomic<int16_t> raw_data_;
+    std::atomic<int16_t> raw_data_;        // Torque sensor raw data
+    std::atomic<int16_t> raw_force_data_;  // Force sensor raw data
 
     // Threading and State
     std::atomic<bool> running_;
